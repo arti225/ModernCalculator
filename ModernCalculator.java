@@ -1,37 +1,26 @@
-// Updated: Fixed visibility issue and enabled calculations in Modern Calculator with Scientific Features
+// ModernCalculator with Toggleable History Panel
 import javax.swing.*;
-import javax.swing.border.AbstractBorder;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
-import java.util.List;
-import java.lang.Math;
 
 public class ModernCalculator extends JFrame implements ActionListener, KeyListener {
-
-    // UI Components
     private JTextField displayField;
     private JLabel operationLabel;
-    private JPanel buttonPanel;
-    private JPanel historyPanel;
-    private JPanel scientificPanel;
-    private JScrollPane historyScrollPane;
-    private JList<String> historyList;
+    private JPanel buttonPanel, scientificPanel, historyPanel;
     private DefaultListModel<String> historyModel;
+    private JList<String> historyList;
+    private JScrollPane historyScrollPane;
 
-    // Calculator Logic
     private double previousValue = 0;
     private String operator = "";
     private boolean waitingForNewValue = false;
-    private List<String> calculations = new ArrayList<>();
 
-    // Theme Colors
     private static final Color DARK_BG = new Color(25, 25, 50);
     private static final Color CARD_BG = new Color(40, 40, 70);
     private static final Color ACCENT_BLUE = new Color(100, 149, 237);
     private static final Color ACCENT_GREEN = new Color(60, 179, 113);
     private static final Color ACCENT_RED = new Color(220, 20, 60);
-    private static final Color ACCENT_ORANGE = new Color(255, 140, 0);
     private static final Color TEXT_PRIMARY = new Color(255, 255, 255);
     private static final Color TEXT_SECONDARY = new Color(200, 200, 200);
     private static final Color BUTTON_NUMBER = new Color(45, 45, 60);
@@ -39,22 +28,14 @@ public class ModernCalculator extends JFrame implements ActionListener, KeyListe
     private static final Color BUTTON_EQUALS = ACCENT_GREEN;
     private static final Color BUTTON_CLEAR = ACCENT_RED;
 
-    public ModernCalculator() {
-        initializeUI();
-    }
+    private boolean historyVisible = false;
 
-    private void initializeUI() {
+    public ModernCalculator() {
         setTitle("CalcPro - Modern Calculator");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(600, 800);
         setLocationRelativeTo(null);
         setResizable(false);
-
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBackground(DARK_BG);
@@ -62,20 +43,14 @@ public class ModernCalculator extends JFrame implements ActionListener, KeyListe
 
         JPanel displayPanel = new JPanel(new BorderLayout());
         displayPanel.setBackground(CARD_BG);
-        displayPanel.setBorder(BorderFactory.createLineBorder(ACCENT_BLUE));
-
-        operationLabel = new JLabel(" ");
-        operationLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        operationLabel = new JLabel(" ", SwingConstants.RIGHT);
         operationLabel.setForeground(TEXT_SECONDARY);
-        operationLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-
         displayField = new JTextField("0");
         displayField.setFont(new Font("Segoe UI", Font.BOLD, 36));
         displayField.setForeground(TEXT_PRIMARY);
         displayField.setBackground(CARD_BG);
-        displayField.setHorizontalAlignment(SwingConstants.RIGHT);
         displayField.setEditable(false);
-
+        displayField.setHorizontalAlignment(SwingConstants.RIGHT);
         displayPanel.add(operationLabel, BorderLayout.NORTH);
         displayPanel.add(displayField, BorderLayout.CENTER);
 
@@ -88,137 +63,142 @@ public class ModernCalculator extends JFrame implements ActionListener, KeyListe
             {"1", "number"}, {"2", "number"}, {"3", "number"}, {"+", "operator"},
             {"0", "number"}, {".", "decimal"}, {"=", "equals"}, {"π", "scientific"}
         };
-
-        for (String[] b : buttons) {
-            JButton btn = createStyledButton(b[0], b[1]);
-            buttonPanel.add(btn);
-        }
+        for (String[] b : buttons) buttonPanel.add(createButton(b[0], b[1]));
 
         scientificPanel = new JPanel(new GridLayout(2, 5, 10, 10));
         scientificPanel.setBackground(DARK_BG);
-        String[] sciFuncs = {"sin", "cos", "tan", "√", "x²", "log", "ln", "e", "^", "%"};
+        String[] sci = {"sin", "cos", "tan", "√", "x²", "log", "ln", "e", "^", "%"};
+        for (String s : sci) scientificPanel.add(createSciButton(s));
 
-        for (String label : sciFuncs) {
-            JButton btn = createStyledButton(label, "scientific");
-            btn.addActionListener(e -> performScientificOperation(label));
-            scientificPanel.add(btn);
-        }
+        historyModel = new DefaultListModel<>();
+        historyList = new JList<>(historyModel);
+        historyList.setForeground(TEXT_PRIMARY);
+        historyList.setBackground(CARD_BG);
+        historyScrollPane = new JScrollPane(historyList);
+        historyScrollPane.setPreferredSize(new Dimension(200, 0));
+        historyPanel = new JPanel(new BorderLayout());
+        historyPanel.setBackground(DARK_BG);
+        historyPanel.add(new JLabel(" History", SwingConstants.CENTER), BorderLayout.NORTH);
+        historyPanel.add(historyScrollPane, BorderLayout.CENTER);
 
-        JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
-        centerPanel.setBackground(DARK_BG);
-        centerPanel.add(displayPanel, BorderLayout.NORTH);
-        centerPanel.add(buttonPanel, BorderLayout.CENTER);
-        centerPanel.add(scientificPanel, BorderLayout.SOUTH);
+        JPanel center = new JPanel(new BorderLayout(10, 10));
+        center.setBackground(DARK_BG);
+        center.add(buttonPanel, BorderLayout.CENTER);
+        center.add(scientificPanel, BorderLayout.SOUTH);
 
-        historyPanel = new JPanel(); // placeholder
-
-        add(centerPanel);
+        mainPanel.add(displayPanel, BorderLayout.NORTH);
+        mainPanel.add(center, BorderLayout.CENTER);
+        add(mainPanel);
 
         setFocusable(true);
         addKeyListener(this);
     }
 
-    private JButton createStyledButton(String text, String type) {
-        JButton button = new JButton(text);
-        button.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        button.setFocusPainted(false);
-        button.setBorderPainted(false);
-        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        Color bgColor;
-        switch (type) {
-            case "number", "decimal" -> bgColor = BUTTON_NUMBER;
-            case "operator", "scientific", "history" -> bgColor = BUTTON_OPERATOR;
-            case "equals" -> bgColor = BUTTON_EQUALS;
-            case "clear", "backspace" -> bgColor = BUTTON_CLEAR;
-            default -> bgColor = BUTTON_NUMBER;
-        }
-        button.setBackground(bgColor);
-        button.setForeground(TEXT_PRIMARY);
-        button.setOpaque(true);
-        button.addActionListener(this);
-        return button;
+    private JButton createButton(String text, String type) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        btn.setForeground(TEXT_PRIMARY);
+        btn.setBackground(switch (type) {
+            case "clear", "backspace" -> BUTTON_CLEAR;
+            case "operator", "scientific", "history" -> BUTTON_OPERATOR;
+            case "equals" -> BUTTON_EQUALS;
+            default -> BUTTON_NUMBER;
+        });
+        btn.setFocusPainted(false);
+        btn.addActionListener(this);
+        return btn;
     }
 
-    private void performScientificOperation(String command) {
+    private JButton createSciButton(String label) {
+        JButton btn = createButton(label, "scientific");
+        btn.addActionListener(e -> performScientificOperation(label));
+        return btn;
+    }
+
+    private void performScientificOperation(String cmd) {
         try {
-            double value = Double.parseDouble(displayField.getText());
-            double result = switch (command) {
-                case "sin" -> Math.sin(Math.toRadians(value));
-                case "cos" -> Math.cos(Math.toRadians(value));
-                case "tan" -> Math.tan(Math.toRadians(value));
-                case "log" -> Math.log10(value);
-                case "ln" -> Math.log(value);
-                case "√" -> Math.sqrt(value);
-                case "x²" -> Math.pow(value, 2);
-                case "π" -> Math.PI;
+            double val = Double.parseDouble(displayField.getText());
+            double res = switch (cmd) {
+                case "sin" -> Math.sin(Math.toRadians(val));
+                case "cos" -> Math.cos(Math.toRadians(val));
+                case "tan" -> Math.tan(Math.toRadians(val));
+                case "√" -> Math.sqrt(val);
+                case "x²" -> Math.pow(val, 2);
+                case "log" -> Math.log10(val);
+                case "ln" -> Math.log(val);
                 case "e" -> Math.E;
+                case "π" -> Math.PI;
+                case "%" -> val / 100;
                 case "^" -> {
-                    double base = value;
-                    String input = JOptionPane.showInputDialog(this, "Enter exponent:");
-                    double exponent = Double.parseDouble(input);
-                    yield Math.pow(base, exponent);
+                    double exp = Double.parseDouble(JOptionPane.showInputDialog("Enter exponent:"));
+                    yield Math.pow(val, exp);
                 }
-                case "%" -> value / 100;
-                default -> value;
+                default -> val;
             };
-            displayField.setText(String.valueOf(result));
-            operationLabel.setText(command + "(" + value + ")");
+            displayField.setText(String.valueOf(res));
+            operationLabel.setText(cmd + "(" + val + ")");
+            historyModel.addElement(cmd + "(" + val + ") = " + res);
             waitingForNewValue = true;
-        } catch (NumberFormatException ex) {
+        } catch (Exception ex) {
             displayField.setText("Error");
         }
     }
 
     public void actionPerformed(ActionEvent e) {
-        String command = e.getActionCommand();
-        switch (command) {
-            case "AC" -> {
-                displayField.setText("0");
-                previousValue = 0;
-                operator = "";
-                waitingForNewValue = false;
-            }
+        String cmd = e.getActionCommand();
+        switch (cmd) {
+            case "AC" -> displayField.setText("0");
             case "⌫" -> {
-                String current = displayField.getText();
-                displayField.setText(current.length() > 1 ? current.substring(0, current.length() - 1) : "0");
+                String cur = displayField.getText();
+                displayField.setText(cur.length() > 1 ? cur.substring(0, cur.length() - 1) : "0");
             }
             case "=" -> {
-                double currentValue = Double.parseDouble(displayField.getText());
-                double result = switch (operator) {
-                    case "+" -> previousValue + currentValue;
-                    case "−" -> previousValue - currentValue;
-                    case "×" -> previousValue * currentValue;
-                    case "÷" -> (currentValue != 0) ? previousValue / currentValue : Double.NaN;
-                    default -> currentValue;
+                double curr = Double.parseDouble(displayField.getText());
+                double res = switch (operator) {
+                    case "+" -> previousValue + curr;
+                    case "−" -> previousValue - curr;
+                    case "×" -> previousValue * curr;
+                    case "÷" -> curr != 0 ? previousValue / curr : 0;
+                    default -> curr;
                 };
-                displayField.setText(String.valueOf(result));
-                previousValue = 0;
+                displayField.setText(String.valueOf(res));
+                historyModel.addElement(previousValue + " " + operator + " " + curr + " = " + res);
                 operator = "";
+                previousValue = 0;
                 waitingForNewValue = true;
             }
             case "." -> {
-                if (!displayField.getText().contains(".")) displayField.setText(displayField.getText() + ".");
+                if (!displayField.getText().contains("."))
+                    displayField.setText(displayField.getText() + ".");
             }
             case "+", "−", "×", "÷" -> {
                 previousValue = Double.parseDouble(displayField.getText());
-                operator = command;
+                operator = cmd;
                 waitingForNewValue = true;
             }
-            case "H" -> JOptionPane.showMessageDialog(this, "History feature");
+            case "H" -> toggleHistoryPanel();
             case "π" -> displayField.setText(String.valueOf(Math.PI));
             default -> {
-                if (command.matches("[0-9]")) {
-                    if (waitingForNewValue) {
-                        displayField.setText(command);
-                        waitingForNewValue = false;
-                    } else {
-                        String current = displayField.getText();
-                        displayField.setText(current.equals("0") ? command : current + command);
-                    }
+                if (cmd.matches("[0-9]")) {
+                    displayField.setText(waitingForNewValue ? cmd : (displayField.getText().equals("0") ? cmd : displayField.getText() + cmd));
+                    waitingForNewValue = false;
                 }
             }
         }
         requestFocusInWindow();
+    }
+
+    private void toggleHistoryPanel() {
+        if (!historyVisible) {
+            add(historyPanel, BorderLayout.EAST);
+            setSize(800, 800);
+        } else {
+            remove(historyPanel);
+            setSize(600, 800);
+        }
+        historyVisible = !historyVisible;
+        revalidate();
+        repaint();
     }
 
     public void keyTyped(KeyEvent e) {}
